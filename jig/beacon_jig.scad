@@ -23,11 +23,11 @@
 part = "assembly";
 
 /* [Board] */
-board_d       = 25.4;   // PCB diameter
+board_d       = 25.0;   // measured PCB diameter
 board_t       = 1.0;    // PCB thickness
 board_back_h  = 4.0;    // measured: battery holder (with cell, if fitted) below the PCB
 notch_pos     = [-11.76, 0.21];
-notch_r       = 3.21;   // radius of the lanyard notch in the board edge
+notch_r       = 3.0;    // radius of the lanyard notch in the board edge (measured ~6 mm across)
 
 /* [Pogo pins] (GA20-10025-0818) */
 pin_tip_to_flange = 9.5;  // plunger tip (extended) to the flange's lower face
@@ -43,12 +43,14 @@ pair_tilt         = 5;    // degrees each of pins 5 and 6 leans away from the ot
 lid_gap           = 3.0;  // clearance between PCB top and lid underside
 
 /* [Jig] */
-clearance     = 0.3;    // per side, for the board pocket, the pegs and the flange seats
+clearance     = 0.3;    // per side, for the flange seats
+board_clearance = 0.15; // per side, for the board pocket and notch key
 floor_t       = 2.0;
 size          = [46, 34];
 corner_r      = 3;
 peg_pos       = [[-18, 11], [18, -11]];
-peg_d         = [5, 3.5];   // different sizes so the lid only fits one way
+peg_hole_d    = [5.6, 4.1]; // holes in the lid; different sizes so the lid only fits one way
+peg_clearance = 0.15;   // per side; the pegs are this much smaller than their holes
 finger_w      = 6;
 band_x        = 13.3;   // rubber-band grooves across lid top and base bottom
 band_w        = 3;
@@ -123,7 +125,7 @@ module base() {
         rounded_rect(size, corner_r, base_h);
         // board pocket, keyed by the notch
         translate([0, 0, floor_t])
-            linear_extrude(pocket_depth + eps) board_2d(clearance);
+            linear_extrude(pocket_depth + eps) board_2d(board_clearance);
         // finger slots to lift the board out
         for (sy = [-1, 1])
             translate([-finger_w / 2, sy > 0 ? 0 : -size[1] / 2 - 1, floor_t + board_back_h - 1])
@@ -132,7 +134,7 @@ module base() {
     }
     for (i = [0 : 1])
         translate([peg_pos[i][0], peg_pos[i][1], base_h - eps])
-            cylinder(d = peg_d[i], h = lid_t);
+            cylinder(d = peg_hole_d[i] - 2 * peg_clearance, h = lid_t);
 }
 
 module lid() {
@@ -140,7 +142,7 @@ module lid() {
         rounded_rect(size, corner_r, lid_t);
         for (i = [0 : 1])
             translate([peg_pos[i][0], peg_pos[i][1], -eps])
-                cylinder(d = peg_d[i] + 2 * clearance, h = lid_t + 2 * eps);
+                cylinder(d = peg_hole_d[i], h = lid_t + 2 * eps);
         for (p = pads)
             pin_frame(p, -(lid_gap + pin_preload)) pin_cavity();
         // pad numbers and a notch marker on top
