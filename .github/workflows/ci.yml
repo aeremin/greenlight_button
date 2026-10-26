@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      # Runs west init/update on manifest/west.yml and installs the matching Zephyr SDK
+      - uses: zephyrproject-rtos/action-zephyr-setup@v1
+        with:
+          app-path: manifest
+          toolchains: arm-zephyr-eabi
+
+      - name: Build beacon
+        run: west build firmware/beacon --pristine --board radioland_beacon
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: beacon
+          path: |
+            build/zephyr/zephyr.hex
+            build/zephyr/zephyr.elf
