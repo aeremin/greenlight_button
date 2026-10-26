@@ -1,0 +1,10 @@
+# Store and check out text files with LF on every platform. This overrides
+# core.autocrlf=true on Windows, which otherwise warns "LF will be replaced
+# by CRLF" for files written with LF (Zephyr/west tooling, editors, OpenSCAD).
+* text=auto eol=lf
+
+# Binary assets
+*.png binary
+
+# Generated ASCII STL meshes: keep LF, but don't show line diffs
+*.stl -diff
