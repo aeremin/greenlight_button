@@ -1,0 +1,17 @@
+manifest:
+  remotes:
+    - name: zephyrproject-rtos
+      url-base: https://github.com/zephyrproject-rtos
+  projects:
+    - name: zephyr
+      remote: zephyrproject-rtos
+      revision: v4.4.2
+      path: zephyr
+      import:
+        path-prefix: third_party
+        # Only the modules an nRF52832 needs; drop this list to get everything.
+        name-allowlist:
+          - cmsis
+          - cmsis_6
+          - hal_nordic
+          - segger

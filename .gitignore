@@ -1,0 +1,10 @@
+# Build artifacts
+build*/
+
+# Dependencies populated by west
+third_party/
+.west
+
+# Python
+.venv/
+__pycache__

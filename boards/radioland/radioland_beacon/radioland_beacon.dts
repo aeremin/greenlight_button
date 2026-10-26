@@ -1,0 +1,118 @@
+/dts-v1/;
+#include <nordic/nrf52832_qfaa.dtsi>
+#include "radioland_beacon-pinctrl.dtsi"
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+
+/*
+ * Pin use follows an-erd/ble_beacon's custom_board.h, which was written for
+ * this board. Its README prose has the LED and button swapped; the code is
+ * what ran on real hardware.
+ */
+
+/ {
+	model = "Radioland nRF52832 coin-cell beacon";
+	compatible = "radioland,beacon";
+
+	chosen {
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+		zephyr,code-partition = &slot0_partition;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		led0: led_0 {
+			gpios = <&gpio0 26 GPIO_ACTIVE_HIGH>;
+			label = "On-board LED";
+		};
+		/* Only on the programming jig, wired to NFC pad 4 */
+		led1: led_1 {
+			gpios = <&gpio0 10 GPIO_ACTIVE_HIGH>;
+			label = "Jig LED";
+		};
+	};
+
+	buttons {
+		compatible = "gpio-keys";
+		button0: button_0 {
+			gpios = <&gpio0 25 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "On-board button";
+			zephyr,code = <INPUT_KEY_0>;
+		};
+		/* Only on the programming jig, wired to NFC pad 3 */
+		button1: button_1 {
+			gpios = <&gpio0 9 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Jig button";
+			zephyr,code = <INPUT_KEY_1>;
+		};
+	};
+
+	aliases {
+		led0 = &led0;
+		led1 = &led1;
+		sw0 = &button0;
+		sw1 = &button1;
+		watchdog0 = &wdt0;
+	};
+};
+
+/* an-erd's firmware enables DC/DC, so the inductor is fitted. */
+&reg {
+	regulator-initial-mode = <NRF5X_REG_MODE_DCDC>;
+};
+
+/* P0.09 / P0.10 carry the jig's button and LED instead of the NFC antenna. */
+&uicr {
+	nfct-pins-as-gpios;
+};
+
+&gpiote {
+	status = "okay";
+};
+
+&gpio0 {
+	status = "okay";
+};
+
+&i2c0 {
+	status = "okay";
+	pinctrl-0 = <&i2c0_default>;
+	pinctrl-1 = <&i2c0_sleep>;
+	pinctrl-names = "default", "sleep";
+
+	sht3x: sht3xd@44 {
+		compatible = "sensirion,sht3xd";
+		reg = <0x44>;
+	};
+
+	/* KX022 accelerometer at 0x1E on some units; Zephyr has no driver for it. */
+};
+
+&flash0 {
+	partitions {
+		ranges;
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			compatible = "zephyr,mapped-partition";
+			label = "mcuboot";
+			reg = <0x00000000 0xc000>;
+		};
+		slot0_partition: partition@c000 {
+			compatible = "zephyr,mapped-partition";
+			label = "image-0";
+			reg = <0x0000c000 0x37000>;
+		};
+		slot1_partition: partition@43000 {
+			compatible = "zephyr,mapped-partition";
+			label = "image-1";
+			reg = <0x00043000 0x37000>;
+		};
+		storage_partition: partition@7a000 {
+			compatible = "zephyr,mapped-partition";
+			label = "storage";
+			reg = <0x0007a000 0x00006000>;
+		};
+	};
+};

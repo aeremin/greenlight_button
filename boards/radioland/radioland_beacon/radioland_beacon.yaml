@@ -1,0 +1,13 @@
+identifier: radioland_beacon/nrf52832
+name: Radioland nRF52832 beacon
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+ram: 64
+flash: 512
+supported:
+  - gpio
+  - i2c
+  - watchdog
+  - counter

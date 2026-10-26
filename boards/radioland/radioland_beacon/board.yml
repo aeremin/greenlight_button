@@ -1,0 +1,5 @@
+board:
+  name: radioland_beacon
+  full_name: Radioland nRF52832 coin-cell beacon
+  socs:
+    - name: nrf52832
