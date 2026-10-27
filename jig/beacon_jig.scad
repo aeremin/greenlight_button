@@ -25,7 +25,8 @@ part = "assembly";
 /* [Board] */
 board_d       = 25.0;   // measured PCB diameter
 board_t       = 1.0;    // PCB thickness
-board_back_h  = 4.0;    // measured: battery holder (with cell, if fitted) below the PCB
+board_back_h  = 2.5;    // battery holder below the PCB; the measured stack of
+                        // holder + PCB is 3.5 mm with the holder squeezed
 notch_pos     = [-11.76, 0.21];
 notch_r       = 3.0;    // radius of the lanyard notch in the board edge (measured ~6 mm across)
 
@@ -38,9 +39,10 @@ pin_flange_t      = 0.5;
 pin_tail_d        = 0.8;
 pin_tail_len      = 1.8;
 pin_hole_d        = 1.8;  // best fit on the printed hole_test
-pin_preload       = 0.8;  // how far each plunger is pushed in when the lid is down
+pin_travel        = 2.5;  // measured plunger travel
+pin_preload       = pin_travel / 2;  // how far each plunger is pushed in when the lid is down
 pair_tilt         = 5;    // degrees each of pins 5 and 6 leans away from the other
-lid_gap           = 3.0;  // clearance between PCB top and lid underside
+lid_t             = 5.7;  // fixed: matches the printed lid that already holds the pins
 
 /* [Jig] */
 clearance     = 0.3;    // per side, for the flange seats
@@ -74,11 +76,12 @@ pads = [
 $fn = 64;
 eps = 0.01;
 
+// The lid top is level with the flange seat of an upright pin, whose
+// extended tip reaches pin_preload below the PCB surface. That leaves this
+// much clearance between the PCB top and the lid underside.
+lid_gap      = pin_tip_to_flange - pin_preload - lid_t;
 pocket_depth = board_back_h + board_t + lid_gap;
 base_h       = floor_t + pocket_depth;
-// The lid top is level with the flange seat of an upright pin, whose
-// extended tip reaches pin_preload below the PCB surface.
-lid_t        = pin_tip_to_flange - pin_preload - lid_gap;
 
 module rounded_rect(sz, r, h) {
     linear_extrude(h)
@@ -193,4 +196,4 @@ else {
         pin_frame(p, base_h + lift - lid_gap - pin_preload) pin_model();
 }
 
-echo(str("base height ", base_h, " mm, lid thickness ", lid_t, " mm"));
+echo(str("base height ", base_h, " mm, lid thickness ", lid_t, " mm, gap above PCB ", lid_gap, " mm"));

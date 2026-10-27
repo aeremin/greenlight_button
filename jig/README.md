@@ -10,11 +10,13 @@ The model is set up for GA20-10025-0818 pins ([drawing](pogo_pin_dimensions.png)
 
 Pads 5 and 6 (SWCLK and SWDIO) are 1.69 mm apart, which is closer than two 1.5 mm barrels allow. Those two pins lean 5° away from each other (`pair_tilt`). Their tips still land on the pads, and the lid has a wall between the barrels, so the two pins can't touch and short.
 
-When the lid is down, each plunger is pushed in by `pin_preload` (0.8 mm). The drawing doesn't give the pins' travel, so check that yours compress by at least 1.2 mm. If they compress less, lower `pin_preload`.
+The plungers travel 2.5 mm (`pin_travel`, measured). When the lid is down, each one is pushed in halfway, by 1.25 mm (`pin_preload`). That leaves 1.25 mm of margin either way for boards that sit higher or lower.
+
+The lid thickness (`lid_t`, 5.7 mm) is fixed to match the lid that already holds the pins, so the base depth is what sets the push. That leaves 2.55 mm between the board and the lid's underside (`lid_gap`, now worked out from the other values). The tallest part on the board, probably the push button, has to fit under that.
 
 ## Board height
 
-`board_back_h` in [beacon_jig.scad](beacon_jig.scad) is set to the measured 4.0 mm. It is the height of whatever is under the PCB, which is the battery holder with the cell in, if you'll flash with it fitted. `board_t` (PCB thickness) is still a guess at 1.0 mm.
+The board and battery holder together measure 3.5 mm with the holder squeezed. The holder flexes, and the pins press it down to about that height. In [beacon_jig.scad](beacon_jig.scad) the measurement is split into `board_t` (PCB, 1.0 mm) and `board_back_h` (holder, 2.5 mm). Only their sum sets the pin height, so if you re-measure, keep the sum right.
 
 After changing a parameter, re-export:
 
@@ -41,5 +43,4 @@ Print everything flat as exported, with no supports. Use a 0.2 mm layer height o
 
 ## Unverified
 
-- The PCB thickness (`board_t`) and the pins' travel are guesses until you measure them.
 - The hole positions are taken from an-erd's design files, not measured on your board. Before you glue the pins, put the lid on with the board in place and look down the holes to check that each one lines up with its pad.
