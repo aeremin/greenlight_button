@@ -16,11 +16,19 @@ LOG_MODULE_REGISTER(link, LOG_LEVEL_INF);
 #define SETTINGS_ROOT "greenlight"
 #define NOTIFY_MAX    20
 #define NOTIFY_QUEUE  8
+#define SUBSCRIPTIONS 2
 #define POLL_MS       100
 
 struct notification {
 	uint8_t len;
 	uint8_t data[NOTIFY_MAX];
+};
+
+/* A slot is free while params.value_handle is 0 */
+struct subscription {
+	struct bt_gatt_subscribe_params params;
+	struct bt_gatt_discover_params discover;
+	struct link *link;
 };
 
 struct link {
@@ -51,8 +59,7 @@ struct link {
 	uint16_t read_size;
 	struct bt_gatt_write_params write;
 
-	struct bt_gatt_subscribe_params sub;
-	struct bt_gatt_discover_params sub_discover;
+	struct subscription subs[SUBSCRIPTIONS];
 	struct k_msgq rx;
 	char rx_buf[NOTIFY_QUEUE * sizeof(struct notification)];
 };
@@ -303,9 +310,16 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
 		goto out;
 	}
 
-	if (err) {
-		LOG_WRN("%s: security failed (%d)", l->name, err);
+	if (err == BT_SECURITY_ERR_PIN_OR_KEY_MISSING) {
+		LOG_WRN("%s: bond rejected; pair it again", l->name);
 		finish(l, -EACCES);
+		bt_conn_disconnect(conn, BT_HCI_ERR_AUTH_FAIL);
+		goto out;
+	}
+
+	if (err) {
+		/* Often just a link that dropped, so try again on the next advertisement */
+		LOG_WRN("%s: security failed (%d), retrying", l->name, err);
 		bt_conn_disconnect(conn, BT_HCI_ERR_AUTH_FAIL);
 		goto out;
 	}
@@ -368,8 +382,13 @@ static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
 
 	l = find_link(conn);
 	if (l && l->connecting && l->pair) {
-		LOG_WRN("%s: pairing failed (%d)", l->name, reason);
-		finish(l, -EACCES);
+		/* A dropped link fails pairing as unspecified; try again on the next advert */
+		if (reason == BT_SECURITY_ERR_UNSPECIFIED) {
+			LOG_WRN("%s: pairing interrupted, retrying", l->name);
+		} else {
+			LOG_WRN("%s: pairing failed (%d)", l->name, reason);
+			finish(l, -EACCES);
+		}
 		bt_conn_disconnect(conn, BT_HCI_ERR_AUTH_FAIL);
 	}
 
@@ -467,6 +486,22 @@ int link_init(void)
 bool link_is_paired(enum peer peer)
 {
 	return paired(&links[peer]);
+}
+
+void link_unpair(enum peer peer)
+{
+	struct link *l = &links[peer];
+	bt_addr_le_t addr;
+
+	k_mutex_lock(&lock, K_FOREVER);
+	bt_addr_le_copy(&addr, &l->addr);
+	bt_addr_le_copy(&l->addr, BT_ADDR_LE_ANY);
+	save_addr(l);
+	k_mutex_unlock(&lock);
+
+	if (!bt_addr_le_eq(&addr, BT_ADDR_LE_ANY)) {
+		bt_unpair(BT_ID_DEFAULT, &addr);
+	}
 }
 
 int link_connect(enum peer peer, bool pair, link_adv_check_t check, k_timeout_t timeout)
@@ -696,11 +731,13 @@ int link_read(enum peer peer, uint16_t handle, void *buf, uint16_t size)
 static uint8_t notify_cb(struct bt_conn *conn, struct bt_gatt_subscribe_params *params,
 			 const void *data, uint16_t length)
 {
-	struct link *l = CONTAINER_OF(params, struct link, sub);
+	struct subscription *s = CONTAINER_OF(params, struct subscription, params);
+	struct link *l = s->link;
 	struct notification n;
 
 	if (!data) {
-		/* Unsubscribed, e.g. by the disconnect */
+		/* Unsubscribed, e.g. by the disconnect, which frees the slot */
+		params->value_handle = 0;
 		return BT_GATT_ITER_STOP;
 	}
 
@@ -715,7 +752,8 @@ static uint8_t notify_cb(struct bt_conn *conn, struct bt_gatt_subscribe_params *
 static void subscribe_cb(struct bt_conn *conn, uint8_t att_err,
 			 struct bt_gatt_subscribe_params *params)
 {
-	struct link *l = CONTAINER_OF(params, struct link, sub);
+	struct subscription *s = CONTAINER_OF(params, struct subscription, params);
+	struct link *l = s->link;
 
 	l->err = att_err ? -EIO : 0;
 	k_sem_give(&l->done);
@@ -724,28 +762,44 @@ static void subscribe_cb(struct bt_conn *conn, uint8_t att_err,
 int link_subscribe(enum peer peer, uint16_t handle)
 {
 	struct link *l = &links[peer];
-	struct bt_conn *conn = get_conn(l);
+	struct subscription *s = NULL;
+	struct bt_conn *conn;
 	int err;
 
+	ARRAY_FOR_EACH_PTR(l->subs, slot) {
+		if (slot->params.value_handle == 0) {
+			s = slot;
+			break;
+		}
+	}
+	if (!s) {
+		return -ENOMEM;
+	}
+
+	conn = get_conn(l);
 	if (!conn) {
 		return -ENOTCONN;
 	}
 
-	l->sub = (struct bt_gatt_subscribe_params){
+	s->link = l;
+	s->params = (struct bt_gatt_subscribe_params){
 		.notify = notify_cb,
 		.subscribe = subscribe_cb,
 		.value = BT_GATT_CCC_NOTIFY,
 		.value_handle = handle,
 		.ccc_handle = BT_GATT_AUTO_DISCOVER_CCC_HANDLE,
 		.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE,
-		.disc_params = &l->sub_discover,
+		.disc_params = &s->discover,
 	};
 	/* Peers don't keep subscriptions across connections, so neither do we */
-	atomic_set_bit(l->sub.flags, BT_GATT_SUBSCRIBE_FLAG_VOLATILE);
+	atomic_set_bit(s->params.flags, BT_GATT_SUBSCRIBE_FLAG_VOLATILE);
 
 	k_sem_reset(&l->done);
-	err = wait_done(l, bt_gatt_subscribe(conn, &l->sub));
+	err = wait_done(l, bt_gatt_subscribe(conn, &s->params));
 	bt_conn_unref(conn);
+	if (err) {
+		s->params.value_handle = 0;
+	}
 	return err;
 }
 

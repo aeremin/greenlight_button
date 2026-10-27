@@ -21,4 +21,7 @@ enum action {
 int gopro_run(enum action action);
 int flysight_run(enum action action);
 
+/* Act as if the button was released after being held this long. */
+void button_press(uint32_t held_ms);
+
 #endif /* ACTION_H_ */

@@ -42,10 +42,12 @@ static atomic_t pairing;
 
 static void request(enum action action)
 {
-	/* The newest press wins over anything queued or running */
+	/* The newest press wins over anything queued or running. Abort first, so the new action
+	 * isn't cut short if main picks it up straight away.
+	 */
+	link_abort();
 	k_msgq_purge(&requests);
 	k_msgq_put(&requests, &action, K_NO_WAIT);
-	link_abort();
 }
 
 static void hold_handler(struct k_work *work)
@@ -73,6 +75,9 @@ static void on_input(struct input_event *evt, void *user_data)
 		return;
 	}
 
+	LOG_INF("Button %d %s", evt->code == INPUT_KEY_0 ? 0 : 1,
+		evt->value ? "pressed" : "released");
+
 	if (evt->value) {
 		pressed_at = k_uptime_get();
 		press_used = false;
@@ -82,20 +87,26 @@ static void on_input(struct input_event *evt, void *user_data)
 	}
 
 	k_work_cancel_delayable(&hold_work);
-	if (press_used) {
-		return;
+	if (!press_used) {
+		button_press(k_uptime_get() - pressed_at);
 	}
-
-	if (atomic_get(&pairing)) {
-		/* A press only ends pairing mode */
-		link_abort();
-		return;
-	}
-
-	request(k_uptime_get() - pressed_at < LONG_PRESS_MS ? ACTION_START : ACTION_STOP);
 }
 
 INPUT_CALLBACK_DEFINE(NULL, on_input, NULL);
+
+void button_press(uint32_t held_ms)
+{
+	LOG_INF("Press held %u ms", held_ms);
+
+	if (held_ms >= PAIRING_PRESS_MS) {
+		request(ACTION_PAIR);
+	} else if (atomic_get(&pairing)) {
+		/* A press only ends pairing mode */
+		link_abort();
+	} else {
+		request(held_ms < LONG_PRESS_MS ? ACTION_START : ACTION_STOP);
+	}
+}
 
 static void peer_main(void *peer, void *action, void *unused)
 {
@@ -191,8 +202,10 @@ int main(void)
 	led_flash(LED_FLASH_OK);
 
 	for (;;) {
-		k_msgq_get(&requests, &action, K_FOREVER);
-		run(action);
+		/* Fails with -ENOMSG when request() purges the queue under us */
+		if (k_msgq_get(&requests, &action, K_FOREVER) == 0) {
+			run(action);
+		}
 	}
 
 	return 0;

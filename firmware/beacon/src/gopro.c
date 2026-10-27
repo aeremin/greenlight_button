@@ -18,9 +18,12 @@ LOG_MODULE_REGISTER(gopro, LOG_LEVEL_INF);
 static const struct bt_uuid_128 command_uuid = BT_UUID_INIT_128(GOPRO_UUID(0x0072));
 static const struct bt_uuid_128 response_uuid = BT_UUID_INIT_128(GOPRO_UUID(0x0073));
 static const struct bt_uuid_128 network_uuid = BT_UUID_INIT_128(GOPRO_UUID(0x0091));
+static const struct bt_uuid_128 network_rsp_uuid = BT_UUID_INIT_128(GOPRO_UUID(0x0092));
 
-/* Manufacturer data: company, schema version, camera status */
-#define COMPANY_ID     0xf202
+/* Manufacturer data: company (GoPro's 0x02f2; its docs show the bytes in air order), schema
+ * version, camera status
+ */
+#define COMPANY_ID     0x02f2
 #define STATUS_AWAKE   BIT(0)
 #define STATUS_PAIRING BIT(2)
 
@@ -39,6 +42,13 @@ static const uint8_t cmd_pairing_finish[] = {
 	'G', 'r', 'e', 'e', 'n', 'l', 'i', 'g', 'h', 't',
 };
 
+/* Its response: feature 0x03, action 0x81, then ResponseGeneric with result 1 (success) */
+#define PAIRING_RSP_FEATURE 0x03
+#define PAIRING_RSP_ACTION  0x81
+#define RESULT_SUCCESS      1
+/* Stay connected a little after pairing, as the camera apps do */
+#define PAIRING_LINGER_MS   2000
+
 #define RESPONSE_TIMEOUT K_SECONDS(2)
 /* Covers booting from sleep and closing a video file */
 #define COMMAND_TIMEOUT  K_SECONDS(20)
@@ -48,10 +58,16 @@ static uint16_t command_handle;
 
 static int camera_status(struct net_buf_simple *ad)
 {
+	static int last = -1;
 	uint8_t data[2];
 
 	if (link_mfg_data(ad, COMPANY_ID, data, sizeof(data)) < (int)sizeof(data)) {
 		return -ENOENT;
+	}
+
+	if (data[1] != last) {
+		last = data[1];
+		LOG_INF("Camera status 0x%02x (schema %u)", data[1], data[0]);
 	}
 	return data[1];
 }
@@ -71,21 +87,17 @@ static int check_awake(uint8_t adv_type, struct net_buf_simple *ad)
 	return (status >= 0 && !(status & STATUS_AWAKE)) ? -EALREADY : 0;
 }
 
-/* Returns the command status from the response, or a negative error. */
-static int command(const uint8_t *req, uint16_t len)
+/*
+ * Wait for the response whose first byte after the packet header is id0 and, with match_id1,
+ * whose second is id1. Returns the offset of that second byte in rsp, or a negative error.
+ */
+static int await_response(uint8_t id0, uint8_t id1, bool match_id1, uint8_t *rsp, size_t size,
+			  int *len)
 {
 	k_timepoint_t end = sys_timepoint_calc(RESPONSE_TIMEOUT);
-	uint8_t rsp[20];
-	int err;
-
-	link_flush(PEER_GOPRO);
-	err = link_write(PEER_GOPRO, command_handle, req, len);
-	if (err) {
-		return err;
-	}
 
 	for (;;) {
-		int n = link_recv(PEER_GOPRO, rsp, sizeof(rsp), sys_timepoint_timeout(end));
+		int n = link_recv(PEER_GOPRO, rsp, size, sys_timepoint_timeout(end));
 		int at;
 
 		if (n < 0) {
@@ -97,11 +109,70 @@ static int command(const uint8_t *req, uint16_t len)
 			continue;
 		}
 		at = 1 + (rsp[0] >> 5);
-		if (at > 3 || n < at + 2 || rsp[at] != req[1]) {
+		if (at > 3 || n < at + 2 || rsp[at] != id0 || (match_id1 && rsp[at + 1] != id1)) {
 			continue;
 		}
-		return rsp[at + 1];
+		*len = n;
+		return at + 1;
 	}
+}
+
+/* Returns the command status from the response, or a negative error. */
+static int command(const uint8_t *req, uint16_t len)
+{
+	uint8_t rsp[20];
+	int at, n, err;
+
+	link_flush(PEER_GOPRO);
+	err = link_write(PEER_GOPRO, command_handle, req, len);
+	if (err) {
+		return err;
+	}
+
+	at = await_response(req[1], 0, false, rsp, sizeof(rsp), &n);
+	return at < 0 ? at : rsp[at];
+}
+
+/* Tell the camera pairing is done, so it keeps the bond and leaves its pairing screen. */
+static int finish_pairing(void)
+{
+	uint16_t cmd_handle, rsp_handle;
+	uint8_t rsp[20];
+	int at, n, err;
+
+	err = link_find(PEER_GOPRO, &network_uuid.uuid, &cmd_handle);
+	if (!err) {
+		err = link_find(PEER_GOPRO, &network_rsp_uuid.uuid, &rsp_handle);
+	}
+	if (!err) {
+		err = link_subscribe(PEER_GOPRO, rsp_handle);
+	}
+	if (err) {
+		LOG_ERR("Network management characteristics not found (%d)", err);
+		return err;
+	}
+
+	link_flush(PEER_GOPRO);
+	err = link_write(PEER_GOPRO, cmd_handle, cmd_pairing_finish, sizeof(cmd_pairing_finish));
+	if (err) {
+		return err;
+	}
+
+	at = await_response(PAIRING_RSP_FEATURE, PAIRING_RSP_ACTION, true, rsp, sizeof(rsp), &n);
+	if (at < 0) {
+		LOG_WRN("No answer to pairing finish (%d)", at);
+		return at;
+	}
+
+	/* After the action, protobuf field 1 (result) as a varint: tag 0x08, then the value */
+	if (n < at + 3 || rsp[at + 1] != 0x08 || rsp[at + 2] != RESULT_SUCCESS) {
+		LOG_WRN("Pairing finish refused (%d bytes, result %d)", n,
+			n >= at + 3 ? rsp[at + 2] : -1);
+		return -EIO;
+	}
+	LOG_INF("Camera confirmed pairing");
+
+	return link_sleep(PAIRING_LINGER_MS);
 }
 
 /* The camera turns commands down while it boots or is busy, so keep asking. */
@@ -129,7 +200,7 @@ static int command_retry(const uint8_t *req, uint16_t len, const char *what)
 int gopro_run(enum action action)
 {
 	link_adv_check_t check = NULL;
-	uint16_t response_handle, network_handle;
+	uint16_t response_handle;
 	int err;
 
 	if (action == ACTION_PAIR) {
@@ -190,11 +261,7 @@ int gopro_run(enum action action)
 		break;
 
 	case ACTION_PAIR:
-		err = link_find(PEER_GOPRO, &network_uuid.uuid, &network_handle);
-		if (!err) {
-			err = link_write(PEER_GOPRO, network_handle, cmd_pairing_finish,
-					 sizeof(cmd_pairing_finish));
-		}
+		err = finish_pairing();
 		if (err) {
 			LOG_ERR("Finishing pairing failed (%d)", err);
 		} else {

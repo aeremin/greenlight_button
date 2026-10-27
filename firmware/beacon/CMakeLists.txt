@@ -13,3 +13,4 @@ target_sources(app PRIVATE
 	src/link.c
 	src/main.c
 )
+target_sources_ifdef(CONFIG_SHELL app PRIVATE src/shell.c)

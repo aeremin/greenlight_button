@@ -31,6 +31,9 @@ int link_init(void);
 
 bool link_is_paired(enum peer peer);
 
+/* Forget the bonded device. */
+void link_unpair(enum peer peer);
+
 /*
  * Scan until the peer advertises, connect, and encrypt the link with the bond keys. With pair
  * set, connect instead to any device that check accepts and bond with it as this peer. check
@@ -55,7 +58,7 @@ int link_write(enum peer peer, uint16_t handle, const void *data, uint16_t len);
 /* Returns the number of bytes read. */
 int link_read(enum peer peer, uint16_t handle, void *buf, uint16_t size);
 
-/* Queue notifications from this characteristic for link_recv(). */
+/* Queue notifications from this characteristic for link_recv(). Up to two per connection. */
 int link_subscribe(enum peer peer, uint16_t handle);
 
 /* Drop queued notifications. */

@@ -72,8 +72,6 @@
 
 &gpio0 {
 	status = "okay";
-	/* Buttons wake through PORT sense; a GPIOTE IN channel would draw current all the time. */
-	sense-edge-mask = <((1 << 9) | (1 << 25))>;
 };
 
 &i2c0 {
