@@ -58,15 +58,17 @@ band_depth    = 1.0;
 label_size    = 1.7;
 label_depth   = 0.4;
 
-// [x, y, pad number, label offset, tilt towards +X in degrees] for the guide's
-// pad numbering: 1 GND, 2 VCC, 3 and 4 NFC, 5 SWCLK, 6 SWDIO.
+// [x, y, label, label start offset, tilt towards +X in degrees, label angle]
+// in the guide's pad order: 1 GND, 2 VCC, 3 and 4 NFC (unlabelled), 5 SWCLK,
+// 6 SWDIO. The SWD labels run upwards because the pins are too close for
+// side-by-side text.
 pads = [
-    [-10.05, -4.83, "1", [ 2.3, -0.3], 0],
-    [ -9.79,  5.59, "2", [ 2.3, -0.3], 0],
-    [  4.04,-10.89, "3", [-2.4,  0.6], 0],
-    [  7.33, -8.88, "4", [-1.9,  1.5], 0],
-    [  7.42, -3.94, "5", [-0.9,  2.4], -pair_tilt],
-    [  9.12, -3.93, "6", [ 0.9,  2.4],  pair_tilt],
+    [-10.05, -4.83, "GND",   [ 1.4,  0  ], 0,          0],
+    [ -9.79,  5.59, "VCC",   [ 1.4,  0  ], 0,          0],
+    [  4.04,-10.89, "",      [ 0,    0  ], 0,          0],
+    [  7.33, -8.88, "",      [ 0,    0  ], 0,          0],
+    [  7.42, -3.94, "SWCLK", [-0.83, 1.8], -pair_tilt, 90],
+    [  9.12, -3.93, "SWDIO", [ 0.83, 1.8],  pair_tilt, 90],
 ];
 
 $fn = 64;
@@ -145,11 +147,11 @@ module lid() {
                 cylinder(d = peg_hole_d[i], h = lid_t + 2 * eps);
         for (p = pads)
             pin_frame(p, -(lid_gap + pin_preload)) pin_cavity();
-        // pad numbers and a notch marker on top
+        // signal names and a notch marker on top
         translate([0, 0, lid_t - label_depth]) linear_extrude(label_depth + eps) {
             for (p = pads)
-                translate([p[0] + p[3][0], p[1] + p[3][1]])
-                    text(p[2], size = label_size, halign = "center", valign = "center",
+                translate([p[0] + p[3][0], p[1] + p[3][1]]) rotate(p[5])
+                    text(p[2], size = label_size, halign = "left", valign = "center",
                          font = "Liberation Sans:style=Bold");
             translate([-size[0] / 2 + 2.5, 0])
                 polygon([[0, 0], [2.5, 1.6], [2.5, -1.6]]);

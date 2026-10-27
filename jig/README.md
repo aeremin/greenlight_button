@@ -2,7 +2,7 @@
 
 A two-part 3D-printed jig for the Radioland nRF52832 coin-cell beacon. The board lies component side up in the base, keyed by its lanyard notch. The lid slides down two pegs and presses six pogo pins onto the pads. The pegs are different sizes, so the lid only fits one way round.
 
-Pad positions come from [an-erd's laser-cut jig](https://github.com/an-erd/ble_beacon/tree/master/Documentation/JIG), which was built for this board, and they agree with Radioland's module diagram. The numbers engraved on the lid match the pad numbers in the [reflashing guide](../Reflashing%20the%20Radioland%20nRF52832%20Coin-Cell%20Beacon.md#wiring): 1 GND, 2 VCC, 3 and 4 NFC, 5 SWCLK, 6 SWDIO.
+Pad positions come from [an-erd's laser-cut jig](https://github.com/an-erd/ble_beacon/tree/master/Documentation/JIG), which was built for this board, and they agree with Radioland's module diagram. The lid is engraved with the signal names VCC, GND, SWDIO and SWCLK. The two NFC pins are left unlabelled. This README uses the pad numbers from the [reflashing guide](../Reflashing%20the%20Radioland%20nRF52832%20Coin-Cell%20Beacon.md#wiring): 1 GND, 2 VCC, 3 and 4 NFC, 5 SWCLK, 6 SWDIO. The guide isn't certain which of the SWD pair is which. If the probe won't connect, swap those two wires; it's harmless.
 
 ## Pins
 
@@ -27,7 +27,7 @@ for p in base lid hole_test; do openscad -D "part=\"$p\"" -o stl/$p.stl beacon_j
 | File | What it is |
 | --- | --- |
 | `stl/base.stl` | Board pocket with alignment pegs and finger slots |
-| `stl/lid.stl` | Pin carrier with flange seats, engraved with pad numbers; the arrow points to the notch side |
+| `stl/lid.stl` | Pin carrier with flange seats, engraved with signal names; the arrow points to the notch side |
 | `stl/hole_test.stl` | Holes from 1.4 to 1.8 mm, for choosing `pin_hole_d` |
 
 Print everything flat as exported, with no supports. Use a 0.2 mm layer height or finer for the lid.
