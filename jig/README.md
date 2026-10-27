@@ -34,7 +34,7 @@ Print everything flat as exported, with no supports. Use a 0.2 mm layer height o
 
 ## Assembly
 
-1. **Size the holes.** Print `hole_test` and push a pin barrel into each hole. Set `pin_hole_d` (default 1.6 mm) to the hole that grips a pin firmly but still lets it slide under thumb pressure, then re-export the lid.
+1. **Size the holes.** Print `hole_test` and push a pin barrel into each hole. Set `pin_hole_d` (now 1.8 mm, the best fit on the first print) to the hole that grips a pin firmly but still lets it slide under thumb pressure, then re-export the lid.
 2. **Fit the pins.** Push each pin in from the top of the lid until its flange sits in its seat. Pins 5 and 6 go in at their 5° lean. Add a drop of CA glue at the flanges if the fit is loose.
 3. **Wire it.** Solder wires to the pin tails following the guide's wiring table. Pins 3 and 4 are optional; an-erd wires a button and an LED to them.
 4. **Flash.** Drop the board in, put the lid on and press it down by hand, or loop rubber bands through the grooves.
