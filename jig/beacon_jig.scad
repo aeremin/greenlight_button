@@ -23,12 +23,13 @@
 part = "assembly";
 
 /* [Board] */
-board_d       = 25.0;   // measured PCB diameter
+board_d       = 25.2;   // measured 25.0 mm, enlarged after a test print
 board_t       = 1.0;    // PCB thickness
 board_back_h  = 2.5;    // battery holder below the PCB; the measured stack of
                         // holder + PCB is 3.5 mm with the holder squeezed
 notch_pos     = [-11.76, 0.21];
-notch_r       = 3.0;    // radius of the lanyard notch in the board edge (measured ~6 mm across)
+notch_r       = 3.15;   // radius of the lanyard notch in the board edge (measured ~6 mm across,
+                        // enlarged to 6.3 mm after a test print)
 
 /* [Pogo pins] (GA20-10025-0818) */
 pin_tip_to_flange = 9.5;  // plunger tip (extended) to the flange's lower face
