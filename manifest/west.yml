@@ -14,4 +14,7 @@ manifest:
           - cmsis
           - cmsis_6
           - hal_nordic
+          # PSA crypto for Bluetooth pairing
+          - mbedtls
+          - tf-psa-crypto
           - segger
